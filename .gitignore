@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Environment variables
+.env
+.env.*
+
+# IDE specific
+.vscode/
+.idea/
+*.sublime-*
+
+# Project memory files
+.ai_memory.json
+*/.ai_memory.json
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# Runtime data
+pids/
+*.pid
+*.seed
+*.pid.lock
+
+# Test directories
+test_project/
+project1/
+project2/
+interactive_project/
+demo_project/
+
+# OS specific
+.DS_Store
+Thumbs.db

@@ -1,0 +1,37 @@
+{
+  "name": "agent-ide",
+  "module": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=20.12.2"
+  },
+  "dependencies": {
+    "bsv": "^2.0.10",
+    "dotenv": "^16.4.1",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "fs-extra": "^11.2.0",
+    "openai": "^4.28.0",
+    "uuid": "^11.1.0",
+    "ws": "^8.18.1"
+  },
+  "version": "1.0.0",
+  "main": "index.js",
+  "keywords": [
+    "ide",
+    "ai",
+    "development",
+    "code-generation",
+    "analysis"
+  ],
+  "author": "",
+  "license": "ISC",
+  "description": "AI-enhanced IDE with intelligent agents for interactive development",
+  "devDependencies": {
+    "@eslint/js": "^9.21.0",
+    "globals": "^16.0.0"
+  }
+}

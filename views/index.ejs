@@ -1,0 +1,240 @@
+<!-- File: views/index.ejs -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal App-Building CoPilot</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 20px auto; padding: 20px; }
+        #input-area { width: 100%; height: 100px; margin-bottom: 10px; }
+        #output { border: 1px solid #ccc; padding: 10px; min-height: 200px; white-space: pre-wrap; }
+        button { padding: 5px 10px; margin-right: 10px; }
+        .section { margin-bottom: 15px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+        .timestamp { color: #666; font-size: 0.8em; }
+        .error { color: red; }
+        .success { color: green; }
+        .manual { color: orange; font-weight: bold; }
+        #sandbox { border: 1px dashed #999; padding: 10px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <h1>Universal App-Building CoPilot</h1>
+    <form id="request-form">
+        <textarea id="input-area" name="query" placeholder="Tell me what kind of app to build (e.g., 'a mobile app for tracking workouts', 'a web app for bird watching')"><%= query || '' %></textarea>
+        <div>
+            <button type="submit">Submit Request</button>
+            <button type="button" onclick="executeCommand()" id="execute-btn" <%= suggestedCommand ? '' : 'disabled' %>>Execute Next Step</button>
+            <button type="button" onclick="reviewFile()">Review File</button>
+            <button type="button" onclick="enhanceFile()">Enhance File</button>
+        </div>
+    </form>
+    <div id="sandbox">
+        <h3>Current Sandbox Structure:</h3>
+        <p><strong>Current Directory:</strong> <%= currentDir %></p>
+        <pre><%= JSON.stringify(sandboxStructure, null, 2) %></pre>
+    </div>
+    <div id="output">
+        <% if (history && history.length > 0) { %>
+            <% history.forEach(item => { %>
+                <div class="section">
+                    <span class="timestamp"><%= item.timestamp %></span>
+                    <% if (item.type === 'copilot') { %>
+                        <h3>App Planning:</h3>
+                        <p><strong>Thoughts:</strong></p><ul><%= item.data.thoughts.map(t => `<li>${t}</li>`).join('') %></ul>
+                        <p><strong>Steps:</strong></p><ol><%= item.data.steps.map(s => `<li>${s}</li>`).join('') %></ol>
+                        <p><strong>Project Structure:</strong></p><pre><%= JSON.stringify(item.data.file_tree, null, 2) %></pre>
+                        <p><strong>Next Command:</strong> <%= item.data.next_terminal_command %></p>
+                    <% } else if (item.type === 'execution') { %>
+                        <h3>Command Execution:</h3>
+                        <p><strong>Command:</strong> <%= item.data.command %></p>
+                        <p><strong>Output:</strong></p><pre><%= item.data.stdout || '' %><span class="error"><%= item.data.stderr || '' %></span></pre>
+                        <% if (item.data.requires_manual_run) { %>
+                            <p class="manual"><strong>Manual Run Detected:</strong> This command runs a server and should be executed in a separate terminal.</p>
+                        <% } %>
+                    <% } else if (item.type === 'review') { %>
+                        <h3>Progress Review:</h3>
+                        <p><strong>Thoughts:</strong></p><ul><%= item.data.thoughts.map(t => `<li>${t}</li>`).join('') %></ul>
+                        <p><strong>Success:</strong> <span class="<%= item.data.success ? 'success' : 'error' %>"><%= item.data.success %></span></p>
+                        <p><strong>Goal:</strong> <%= item.data.goal_of_command %></p>
+                        <p><strong>Next Command:</strong> <%= item.data.next_terminal_command %></p>
+                        <% if (item.data.requires_manual_edit) { %>
+                            <p class="manual"><strong>Manual Edit Required:</strong> <%= item.data.manual_edit_instructions %></p>
+                        <% } %>
+                        <% if (item.data.requires_manual_run) { %>
+                            <p class="manual"><strong>Manual Run Required:</strong> <%= item.data.manual_run_instructions %></p>
+                        <% } %>
+                    <% } else if (item.type === 'file_review') { %>
+                        <h3>File Review:</h3>
+                        <p><strong>File Path:</strong> <%= item.data.file_path %></p>
+                        <p><strong>Content:</strong></p><pre><%= item.data.file_content %></pre>
+                        <p><strong>Review:</strong> <%= item.data.review %></p>
+                        <p><strong>Next Steps:</strong></p><ul><%= item.data.next_steps.map(s => `<li>${s}</li>`).join('') %></ul>
+                    <% } else if (item.type === 'file_enhance') { %>
+                        <h3>File Enhancement:</h3>
+                        <p><strong>File Path:</strong> <%= item.data.file_path %></p>
+                        <p><strong>Enhancements:</strong></p><ul><%= item.data.enhancements.map(e => `<li>${e}</li>`).join('') %></ul>
+                        <p><strong>Updated Code:</strong></p><pre><%= item.data.code %></pre>
+                        <p><strong>Next Steps:</strong></p><ul><%= item.data.next_steps.map(s => `<li>${s}</li>`).join('') %></ul>
+                    <% } %>
+                </div>
+            <% }) %>
+        <% } else { %>
+            Enter a request above to begin building your app in the sandbox...
+        <% } %>
+    </div>
+
+    <script>
+        let currentCommand = '<%= suggestedCommand || "" %>';
+        let history = <%- JSON.stringify(history || []) %>;
+        let sandboxStructure = <%- JSON.stringify(sandboxStructure || {}) %>;
+        let currentDir = '<%= currentDir || "" %>';
+
+        async function executeCommand() {
+            if (!currentCommand) return;
+
+            const output = document.getElementById('output');
+            output.textContent = 'Executing command...';
+
+            try {
+                const response = await fetch('/execute-and-review', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ command: currentCommand, history, currentDir })
+                });
+                if (!response.ok) throw new Error('Server error');
+                const data = await response.json();
+                updateDisplay(data);
+            } catch (error) {
+                output.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        document.getElementById('request-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const formData = new FormData(e.target);
+            const query = formData.get('query');
+
+            const output = document.getElementById('output');
+            output.textContent = 'Planning your app...';
+
+            try {
+                const response = await fetch('/copilot', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query, history, currentDir })
+                });
+                if (!response.ok) throw new Error('Server error');
+                const data = await response.json();
+                updateDisplay(data);
+                document.getElementById('input-area').value = '';
+            } catch (error) {
+                output.textContent = `Error: ${error.message}`;
+            }
+        });
+
+        async function reviewFile() {
+            const filePath = prompt("Enter the file path to review:");
+            if (!filePath) return;
+
+            const output = document.getElementById('output');
+            output.textContent = 'Reviewing file...';
+
+            try {
+                const response = await fetch('/review-file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filePath, history, currentDir })
+                });
+                if (!response.ok) throw new Error('Server error');
+                const data = await response.json();
+                updateDisplay(data);
+            } catch (error) {
+                output.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        async function enhanceFile() {
+            const filePath = prompt("Enter the file path to enhance:");
+            if (!filePath) return;
+
+            const output = document.getElementById('output');
+            output.textContent = 'Enhancing file...';
+
+            try {
+                const response = await fetch('/enhance-file', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ filePath, history, currentDir })
+                });
+                if (!response.ok) throw new Error('Server error');
+                const data = await response.json();
+                updateDisplay(data);
+            } catch (error) {
+                output.textContent = `Error: ${error.message}`;
+            }
+        }
+
+        function updateDisplay(data) {
+            history = data.history;
+            currentCommand = data.suggestedCommand || '';
+            sandboxStructure = data.sandboxStructure || {};
+            currentDir = data.currentDir || '';
+
+            document.getElementById('execute-btn').disabled = !currentCommand;
+
+            const output = document.getElementById('output');
+            const sandboxDiv = document.getElementById('sandbox');
+            sandboxDiv.innerHTML = '<h3>Current Sandbox Structure:</h3>' +
+                                  `<p><strong>Current Directory:</strong> ${currentDir}</p>` +
+                                  '<pre>' + JSON.stringify(sandboxStructure, null, 2) + '</pre>';
+
+            let html = '';
+            history.forEach(item => {
+                html += `<div class="section"><span class="timestamp">${item.timestamp}</span>`;
+                if (item.type === 'copilot') {
+                    html += '<h3>App Planning:</h3>' +
+                           '<p><strong>Thoughts:</strong></p><ul>' + item.data.thoughts.map(t => `<li>${t}</li>`).join('') + '</ul>' +
+                           '<p><strong>Steps:</strong></p><ol>' + item.data.steps.map(s => `<li>${s}</li>`).join('') + '</ol>' +
+                           '<p><strong>Project Structure:</strong></p><pre>' + JSON.stringify(item.data.file_tree, null, 2) + '</pre>' +
+                           `<p><strong>Next Command:</strong> ${item.data.next_terminal_command}</p>`;
+                } else if (item.type === 'execution') {
+                    html += '<h3>Command Execution:</h3>' +
+                           `<p><strong>Command:</strong> ${item.data.command}</p>` +
+                           '<p><strong>Output:</strong></p><pre>' + (item.data.stdout || '') + '<span class="error">' + (item.data.stderr || '') + '</span></pre>';
+                    if (item.data.requires_manual_run) {
+                        html += `<p class="manual"><strong>Manual Run Detected:</strong> This command runs a server and should be executed in a separate terminal.</p>`;
+                    }
+                } else if (item.type === 'review') {
+                    html += '<h3>Progress Review:</h3>' +
+                           '<p><strong>Thoughts:</strong></p><ul>' + item.data.thoughts.map(t => `<li>${t}</li>`).join('') + '</ul>' +
+                           `<p><strong>Success:</strong> <span class="${item.data.success ? 'success' : 'error'}">${item.data.success}</span></p>` +
+                           `<p><strong>Goal:</strong> ${item.data.goal_of_command}</p>` +
+                           `<p><strong>Next Command:</strong> ${item.data.next_terminal_command}</p>`;
+                    if (item.data.requires_manual_edit) {
+                        html += `<p class="manual"><strong>Manual Edit Required:</strong> ${item.data.manual_edit_instructions}</p>`;
+                    }
+                    if (item.data.requires_manual_run) {
+                        html += `<p class="manual"><strong>Manual Run Required:</strong> ${item.data.manual_run_instructions}</p>`;
+                    }
+                } else if (item.type === 'file_review') {
+                    html += '<h3>File Review:</h3>' +
+                           `<p><strong>File Path:</strong> ${item.data.file_path}</p>` +
+                           '<p><strong>Content:</strong></p><pre>' + item.data.file_content + '</pre>' +
+                           `<p><strong>Review:</strong> ${item.data.review}</p>` +
+                           '<p><strong>Next Steps:</strong></p><ul>' + item.data.next_steps.map(s => `<li>${s}</li>`).join('') + '</ul>';
+                } else if (item.type === 'file_enhance') {
+                    html += '<h3>File Enhancement:</h3>' +
+                           `<p><strong>File Path:</strong> ${item.data.file_path}</p>` +
+                           '<p><strong>Enhancements:</strong></p><ul>' + item.data.enhancements.map(e => `<li>${e}</li>`).join('') + '</ul>' +
+                           '<p><strong>Updated Code:</strong></p><pre>' + item.data.code + '</pre>' +
+                           '<p><strong>Next Steps:</strong></p><ul>' + item.data.next_steps.map(s => `<li>${s}</li>`).join('') + '</ul>';
+                }
+                html += '</div>';
+            });
+
+            output.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
